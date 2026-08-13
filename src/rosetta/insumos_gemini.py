@@ -18,11 +18,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Set
 
 from .arvore import Arvore, montar_arvore
 from .config import Config
 from .nomes import ResolvedorNomes
+from .parser_cds import parse_cds
 from .seguranca import sql_leitura
 
 
@@ -74,6 +75,29 @@ def montar_cadeia_ddl(
         texto="\n\n".join(blocos),
         arvore=arv,
     )
+
+
+def sql_view_names_da_cadeia(cadeia: CadeiaDdl, indice: Dict[str, str]) -> List[str]:
+    """DD03L não indexa pelo nome da CDS (`I_BILLINGDOCUMENT`) — indexa pela
+    estrutura/SQL view gerada na compilação (`@AbapCatalog.sqlViewName`, ex.:
+    `BILLINGDOCUMENTHEADER_S`). Parseia cada CDS da cadeia e devolve esses
+    nomes gerados, que são o `tabname` correto para consultar o DD03L.
+    """
+    nomes: List[str] = []
+    for ddlname in cadeia.ddlnames:
+        src = indice.get(ddlname)
+        if not src:
+            continue
+        view = parse_cds(ddlname, src)
+        if view.sql_view_name:
+            nomes.append(view.sql_view_name.strip().upper())
+    vistos: Set[str] = set()
+    unicos = []
+    for n in nomes:
+        if n not in vistos:
+            vistos.add(n)
+            unicos.append(n)
+    return unicos
 
 
 # --------------------------------------------------------------- 2. Metadados
@@ -224,16 +248,25 @@ def montar_pacote(
     indice: Dict[str, str],
     resolvedor: ResolvedorNomes,
     ddlname: str,
-    tabnames_metadados: List[str],
     tabela_legada: str,
+    tabnames_metadados: Optional[List[str]] = None,
     seguir_assoc: bool = False,
     max_profundidade: int = 15,
     idioma: str = "P",
 ) -> PacoteGemini:
+    """`tabnames_metadados=None` (padrão) deriva automaticamente os nomes a
+    consultar no DD03L a partir do `sql_view_name` de cada CDS da cadeia —
+    o DD03L é indexado pela estrutura/SQL view gerada, não pelo nome da CDS.
+    Passe a lista explicitamente só se souber que precisa de outros nomes."""
     cadeia = montar_cadeia_ddl(
         ddlname, indice=indice, resolvedor=resolvedor,
         seguir_assoc=seguir_assoc, max_profundidade=max_profundidade,
     )
+    if not tabnames_metadados:
+        tabnames_metadados = sql_view_names_da_cadeia(cadeia, indice)
+        if not tabnames_metadados:
+            tabnames_metadados = [cadeia.ddlname_raiz]
+
     metadados = buscar_metadados_campos(spark, cfg, tabnames_metadados, idioma=idioma)
     sct = buscar_show_create_table(spark, cfg, tabela_legada)
     return PacoteGemini(

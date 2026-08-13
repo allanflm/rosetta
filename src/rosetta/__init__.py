@@ -26,6 +26,7 @@ from .insumos_gemini import (
     montar_cadeia_ddl,
     montar_pacote,
     salvar_pacote,
+    sql_view_names_da_cadeia,
 )
 from .inventario import Certeza, certeza_real
 from .modelos import Associacao, Campo, JoinBruto, ViewCds
@@ -45,5 +46,5 @@ __all__ = [
     "carregar_indice", "certeza_real", "formatar_metadados", "gerar_sql",
     "montar_arvore", "montar_cadeia_ddl", "montar_pacote", "nome_pasta",
     "parse_cds", "resolver_projection", "salvar_artefatos", "salvar_pacote",
-    "sanitizar", "sql_leitura", "traduzir", "__version__",
+    "sanitizar", "sql_leitura", "sql_view_names_da_cadeia", "traduzir", "__version__",
 ]

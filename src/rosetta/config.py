@@ -21,8 +21,8 @@ class Config:
     catalog_target: str = "platform_dev"
     schema_target: str = "sap_s4_nc2_replica"
     tabela_dd03l: str = "dd03l"
-    catalog_legado: str = "platform"
-    schema_legado: str = "sap_s4_replica"
+    catalog_legado: str = "platform_dev"
+    schema_legado: str = "sap_s4_nc2_raw"
 
     @property
     def fqn_ddl(self) -> str:
@@ -81,8 +81,8 @@ class Config:
             catalog_target=_w("catalog_target", "platform_dev"),
             schema_target=_w("schema_target", "sap_s4_nc2_replica"),
             tabela_dd03l=_w("tabela_dd03l", "dd03l"),
-            catalog_legado=_w("catalog_legado", "platform"),
-            schema_legado=_w("schema_legado", "sap_s4_replica"),
+            catalog_legado=_w("catalog_legado", "platform_dev"),
+            schema_legado=_w("schema_legado", "sap_s4_nc2_raw"),
         )
 
     def resumo(self) -> str:
