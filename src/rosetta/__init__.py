@@ -13,6 +13,7 @@ Nada neste pacote escreve no catálogo do Databricks. A trava está em
 `rosetta.seguranca`, por onde passa toda consulta ao Spark.
 """
 from .arvore import Arvore, montar_arvore
+from .avisos_fonte import AvisoFonte, classificar_cadeia, resumo_avisos
 from .config import MARCA_META, Config
 from .escritor import Artefatos, nome_pasta, salvar_artefatos
 from .gerador import gerar_sql
@@ -39,12 +40,13 @@ from .traducao import resolver_projection, traduzir
 __version__ = "0.1.0"
 
 __all__ = [
-    "Arvore", "Artefatos", "Associacao", "CadeiaDdl", "Campo", "Certeza", "Config",
-    "Contexto", "JoinBruto", "MARCA_META", "PacoteGemini", "ResolvedorNomes",
+    "Arvore", "Artefatos", "Associacao", "AvisoFonte", "CadeiaDdl", "Campo", "Certeza",
+    "Config", "Contexto", "JoinBruto", "MARCA_META", "PacoteGemini", "ResolvedorNomes",
     "Resultado", "SqlNaoPermitido", "ViewCds", "assert_leitura",
     "buscar_metadados_campos", "buscar_show_create_table", "buscar_source",
-    "carregar_indice", "certeza_real", "formatar_metadados", "gerar_sql",
-    "montar_arvore", "montar_cadeia_ddl", "montar_pacote", "nome_pasta",
-    "parse_cds", "resolver_projection", "salvar_artefatos", "salvar_pacote",
-    "sanitizar", "sql_leitura", "sql_view_names_da_cadeia", "traduzir", "__version__",
+    "carregar_indice", "certeza_real", "classificar_cadeia", "formatar_metadados",
+    "gerar_sql", "montar_arvore", "montar_cadeia_ddl", "montar_pacote", "nome_pasta",
+    "parse_cds", "resolver_projection", "resumo_avisos", "salvar_artefatos",
+    "salvar_pacote", "sanitizar", "sql_leitura", "sql_view_names_da_cadeia",
+    "traduzir", "__version__",
 ]
