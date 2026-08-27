@@ -10,7 +10,7 @@ operação. Isso permite testar parser, tradução e geração fora do cluster, 
 
 ## Estrutura do repositório
 
-```
+```text
 ├── .github/workflows/
 │   └── testes.yml               # CI: roda pytest + lint a cada push
 │
