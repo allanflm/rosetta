@@ -22,31 +22,43 @@ operação. Isso permite testar parser, tradução e geração fora do cluster, 
 │   ├── tokens.py                # tokenização do fonte CDS (sem Spark)
 │   ├── parser_cds.py            # parse_cds — nunca levanta exceção
 │   ├── traducao.py              # regras ABAP CDS → Databricks SQL + sinais de aviso
+│   ├── avisos_fonte.py          # classifica cadeias de avisos herdados por dependência
 │   ├── nomes.py                 # entidade CDS/tabela SAP → nome físico no Databricks
 │   ├── indice.py                # índice ddlname→source carregado em 1 consulta
 │   ├── arvore.py                # árvore de dependências com memoização
 │   ├── gerador.py               # gerar_sql (CREATE sai comentado)
 │   ├── localizador.py           # Motor 01 — inventário/pré-seleção estrutural
-│   ├── inventario.py            # certeza real — roda o parser em lote
-│   ├── pipeline.py              # Contexto e Resultado — fachada usada pelos notebooks
-│   └── bootstrap.py             # acha a raiz do repo a partir do notebook
+│   ├── fluxo.py                 # decide Fluxo A (base já existe) vs Fluxo B (do zero)
+│   ├── notebook_writer.py       # monta o notebook versionado view_<nome>_NNNNN.ipynb
+│   ├── escritor.py              # grava artefatos (.sql, .ipynb, metadata.json) em ddl/
+│   ├── workspace_sync.py        # envia notebook gerado pro Workspace do Databricks
+│   ├── insumos_gemini.py        # pacote de insumos (SQL SAP, DD03L/DD04T, SHOW CREATE) p/ Gemini
+│   └── pipeline.py              # Contexto e Resultado — fachada usada pelos notebooks
+│
+├── mcp_server/                  # servidor MCP (FastMCP, stdio) — expõe as tools do
+│   └── ...                      # pipeline somente-leitura pro Claude Code (`.mcp.json`)
+│
+├── .claude/skills/gerar-view/   # skill que orquestra as tools MCP (`/gerar-view <nome>`)
 │
 ├── notebooks/
 │   ├── 01_gerar_view.ipynb      # ⭐ o do dia a dia: 1 ddlname → árvore + SQL + arquivos
-│   └── 02_inventario.ipynb      # varredura completa (roda de vez em quando)
+│   └── 03_pacote_gemini.ipynb   # monta o pacote de insumos pra colar no Gemini
 │
 ├── ddl/                         # 📂 saída: uma pasta por CDS view
-│   ├── I_ADDRESS/
-│   │   ├── I_ADDRESS.sql        # o SQL traduzido (CREATE comentado)
-│   │   ├── arvore.txt           # árvore de dependências
-│   │   ├── avisos.txt           # só existe quando há avisos
-│   │   └── metadata.json        # entidade, tipo, tabelas físicas, contagens
-│   └── _inventario/             # saída do notebook 02
+│   └── view_<nome>/
+│       ├── view_<nome>_00001.ipynb  # notebook versionado (CREATE OR REPLACE descomentado)
+│       ├── <nome>.sql               # SQL traduzido solto (CREATE comentado — diagnóstico)
+│       ├── arvore.txt               # árvore de dependências
+│       └── metadata.json            # entidade, tipo, contagens, pendente_validacao
 │
 ├── tests/
-│   └── test_rosetta.py          # 25 testes, rodam sem Spark
+│   ├── test_rosetta.py
+│   ├── test_fluxo.py
+│   ├── test_notebook_writer.py
+│   └── test_mcp_server.py
 │
 ├── requirements.txt
+├── requirements-mcp.txt
 ├── .python-version
 └── .gitignore
 ```
@@ -54,6 +66,13 @@ operação. Isso permite testar parser, tradução e geração fora do cluster, 
 ---
 
 ## Uso
+
+### Via Claude Code (skill `gerar-view`)
+
+Com o servidor MCP `rosetta` registrado (`.mcp.json`), peça direto: `/gerar-view
+I_ADDRESS` ou "quero a view databricks da I_ADDRESS". A skill chama a tool MCP
+`gerar_view_completa`, que decide Fluxo A/B, monta e grava o notebook versionado +
+artefatos em `ddl/view_<nome>/`.
 
 ### Gerar o SQL de uma view (notebook `01_gerar_view`)
 
@@ -79,15 +98,6 @@ print(res.avisos)              # [] = tradução direta, sem revisão manual
 print(res.selo())              # ✅ / ⚠️ / ❌
 ```
 
-### Inventário completo (notebook `02_inventario`)
-
-Responde duas perguntas diferentes:
-
-| Conceito | O que significa |
-|---|---|
-| **APTA** | Pré-seleção estrutural: fonte íntegro + tipo suportado + dependências limpas. É uma *candidata*. |
-| **GARANTIDA** | Rodou parser + gerador de fato e saiu SQL com **zero avisos**. É *resultado verificado*. |
-
 ---
 
 ## 🔒 Somente leitura
@@ -98,9 +108,16 @@ Duas coisas diferentes que é fácil confundir:
   `rosetta.seguranca.sql_leitura`, que recusa qualquer statement que não comece com
   `SELECT`, `WITH`, `DESCRIBE`, `SHOW` ou `EXPLAIN`. Não existe `CREATE`, `INSERT`,
   `MERGE`, `DROP`, `saveAsTable`, `.write` nem temp view em lugar nenhum do projeto.
-- **Arquivos do repositório: é onde a saída é gravada.** O SQL traduzido é salvo como
-  texto em `ddl/<DDLNAME>/`, com o `CREATE OR REPLACE VIEW` **comentado**. Nada executa
-  esse SQL — aplicar no ambiente é uma decisão manual, futura e fora deste projeto.
+- **Arquivos do repositório: é onde a saída é gravada.** O `.sql` solto de diagnóstico
+  em `ddl/view_<nome>/` sai com o `CREATE OR REPLACE VIEW` **comentado**. Já o notebook
+  versionado (`view_<nome>_NNNNN.ipynb`) sai com o `CREATE OR REPLACE VIEW`
+  **descomentado** de propósito — é o artefato de revisão/PR humana antes de entrar na
+  esteira, não uma execução automática do Rosetta. A pasta `ddl/`/esteira GitHub não
+  dispara auto-deploy.
+- **Única exceção de escrita real**: a tool MCP `enviar_para_workspace`
+  (`src/rosetta/workspace_sync.py`) grava o notebook já gerado no *workspace de
+  arquivos* do Databricks (REST API), nunca no catálogo/tabelas — sempre um passo
+  manual e separado, nunca disparado automaticamente.
 
 Se quiser rodar sem gravar nada, coloque o widget `gravar_arquivos` em `Nao`: o notebook
 mostra os caminhos que usaria e não toca no disco.
