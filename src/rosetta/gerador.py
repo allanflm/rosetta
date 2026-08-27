@@ -28,24 +28,43 @@ MAPA_JOIN_SQL = {
 def _montar_corpo_select(bloco: dict, resolvedor: ResolvedorNomes, avisos: List[str]) -> str:
     """Monta o SELECT/FROM/JOIN/WHERE de um único bloco (branch de UNION ou a view
     inteira quando não há UNION). `avisos` é compartilhado entre blocos."""
-    alias_base = bloco["alias_base"] or bloco["entidade_base"]
+    # Entidades com namespace SAP (ex.: /DMBE/I_CPF_SCALE) não têm alias explícito
+    # quando o CDS não declara 'as X' no FROM — sem sanitizar, a barra e a caixa
+    # mista do nome bruto viram um alias SQL inválido no Databricks.
+    alias_base = sanitizar(bloco["alias_base"] or bloco["entidade_base"])
     tabela_base = resolvedor.fisico(bloco["entidade_base"])
 
+    # Associations expostas na lista de campos (ex.: '..., _CpfParameter, _DealDocument }'
+    # sem 'as') são navegação CDS, não colunas escalares da tabela física — não têm
+    # equivalente de coluna pra selecionar. Excluídas do SELECT (ficam só como aviso).
+    nomes_assoc = {a.alias.lower() for a in bloco["associacoes"]}
+    campos_assoc_expostas = [
+        c for c in bloco["campos"] if c.alias is None and c.expressao.strip().lower() in nomes_assoc
+    ]
+    campos_reais = [c for c in bloco["campos"] if c not in campos_assoc_expostas]
+
     mapa = {}
-    for c in bloco["campos"]:
+    for c in campos_reais:
         nome_saida = (c.alias or c.expressao.split(".")[-1]).lower()
         if re.fullmatch(r"[A-Za-z0-9_]+", c.expressao):
             mapa[nome_saida] = f"{alias_base}.{c.expressao}"
         elif re.fullmatch(r"[A-Za-z0-9_]+\.[A-Za-z0-9_]+", c.expressao):
             mapa[nome_saida] = c.expressao
 
-    texto_uso = " ".join(c.expressao for c in bloco["campos"]) + " " + (bloco["where"] or "")
+    texto_uso = " ".join(c.expressao for c in campos_reais) + " " + (bloco["where"] or "")
     usadas = [a for a in bloco["associacoes"] if re.search(rf"\b{re.escape(a.alias)}\.", texto_uso)]
     nao_usadas = [a.alias for a in bloco["associacoes"] if a not in usadas]
 
+    if campos_assoc_expostas:
+        avisos.append(
+            "Associations expostas na projeção (navegação CDS, sem coluna física "
+            "equivalente — excluídas do SELECT): "
+            + ", ".join(c.expressao.strip() for c in campos_assoc_expostas)
+        )
+
     linhas_select = []
-    total = len(bloco["campos"])
-    for idx, c in enumerate(bloco["campos"]):
+    total = len(campos_reais)
+    for idx, c in enumerate(campos_reais):
         expr = traduzir(c.expressao, avisos)
         if re.fullmatch(r"[A-Za-z0-9_]+", expr):
             expr = f"{alias_base}.{expr}"

@@ -4,9 +4,8 @@ Três eixos: completude (o texto não foi cortado pelo transporte RFC), tipo (vi
 CREATE VIEW no Databricks ou não) e fecho de dependências (nenhuma origem, direta
 ou indireta, está truncada).
 
-Isto é uma PRÉ-SELEÇÃO estrutural — não roda o parser de verdade. Para saber quais
-views realmente geram SQL limpo, use `inventario.certeza_real()`, que executa
-parse + geração em lote.
+Isto é uma PRÉ-SELEÇÃO estrutural — não roda o parser de verdade. Para saber se uma
+view específica realmente gera SQL limpo, use `gerador.gerar_sql()` diretamente.
 """
 from __future__ import annotations
 

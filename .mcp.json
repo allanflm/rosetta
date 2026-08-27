@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "rosetta": {
+      "command": "./.venv/Scripts/python",
+      "args": ["-m", "mcp_server.server"]
+    }
+  }
+}

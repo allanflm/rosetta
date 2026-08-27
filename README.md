@@ -27,21 +27,17 @@ operação. Isso permite testar parser, tradução e geração fora do cluster, 
 │   ├── arvore.py                # árvore de dependências com memoização
 │   ├── gerador.py               # gerar_sql (CREATE sai comentado)
 │   ├── localizador.py           # Motor 01 — inventário/pré-seleção estrutural
-│   ├── inventario.py            # certeza real — roda o parser em lote
-│   ├── pipeline.py              # Contexto e Resultado — fachada usada pelos notebooks
-│   └── bootstrap.py             # acha a raiz do repo a partir do notebook
+│   └── pipeline.py              # Contexto e Resultado — fachada usada pelos notebooks
 │
 ├── notebooks/
-│   ├── 01_gerar_view.ipynb      # ⭐ o do dia a dia: 1 ddlname → árvore + SQL + arquivos
-│   └── 02_inventario.ipynb      # varredura completa (roda de vez em quando)
+│   └── 01_gerar_view.ipynb      # ⭐ o do dia a dia: 1 ddlname → árvore + SQL + arquivos
 │
 ├── ddl/                         # 📂 saída: uma pasta por CDS view
-│   ├── I_ADDRESS/
-│   │   ├── I_ADDRESS.sql        # o SQL traduzido (CREATE comentado)
-│   │   ├── arvore.txt           # árvore de dependências
-│   │   ├── avisos.txt           # só existe quando há avisos
-│   │   └── metadata.json        # entidade, tipo, tabelas físicas, contagens
-│   └── _inventario/             # saída do notebook 02
+│   └── I_ADDRESS/
+│       ├── I_ADDRESS.sql        # o SQL traduzido (CREATE comentado)
+│       ├── arvore.txt           # árvore de dependências
+│       ├── avisos.txt           # só existe quando há avisos
+│       └── metadata.json        # entidade, tipo, tabelas físicas, contagens
 │
 ├── tests/
 │   └── test_rosetta.py          # 25 testes, rodam sem Spark
@@ -78,15 +74,6 @@ print(res.sql)                 # SQL Databricks
 print(res.avisos)              # [] = tradução direta, sem revisão manual
 print(res.selo())              # ✅ / ⚠️ / ❌
 ```
-
-### Inventário completo (notebook `02_inventario`)
-
-Responde duas perguntas diferentes:
-
-| Conceito | O que significa |
-|---|---|
-| **APTA** | Pré-seleção estrutural: fonte íntegro + tipo suportado + dependências limpas. É uma *candidata*. |
-| **GARANTIDA** | Rodou parser + gerador de fato e saiu SQL com **zero avisos**. É *resultado verificado*. |
 
 ---
 

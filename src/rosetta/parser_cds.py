@@ -32,15 +32,19 @@ RE_ASSOC = re.compile(
 # Estilo clássico: "as select <col1, col2, ...> from tabela [as alias] [join ...]"
 # — herdado de views de banco clássico (pool/cluster), sem a sintaxe de chaves {}.
 RE_AS_SELECT = re.compile(r"\b(?:as\s+)?select\b(?:\s+distinct\b)?", re.I)
+# CDS (estilo entidade) aceita uma dica de cardinalidade opcional entre o tipo de
+# join e a palavra 'join' (ex.: 'left outer to one join', 'inner to many join') —
+# puramente informativa pro compilador ABAP, sem efeito na tradução SQL além de
+# sinalizar risco de multiplicação de linhas (ver aviso em gerador.py).
+_HINT_CARD = r"(?:\s+to\s+(one|many))?"
 RE_JOIN = re.compile(
-    r"\b(inner\s+join|left\s+outer\s+join|left\s+join|right\s+outer\s+join|"
-    r"right\s+join|full\s+outer\s+join|full\s+join|join)\s+"
-    r"([A-Za-z0-9_/]+)(?:\s+as\s+([A-Za-z0-9_]+))?\s+on\s+",
+    r"\b(inner|left\s+outer|left|right\s+outer|right|full\s+outer|full)?" + _HINT_CARD +
+    r"\s*\bjoin\s+([A-Za-z0-9_/]+)(?:\s+as\s+([A-Za-z0-9_]+))?\s+on\s+",
     re.I,
 )
 RE_JOIN_KW = re.compile(
-    r"\b(?:inner\s+join|left\s+outer\s+join|left\s+join|right\s+outer\s+join|"
-    r"right\s+join|full\s+outer\s+join|full\s+join|join)\b",
+    r"\b(?:inner|left\s+outer|left|right\s+outer|right|full\s+outer|full)?" + _HINT_CARD +
+    r"\s*\bjoin\b",
     re.I,
 )
 RE_UNIAO_KW = re.compile(r"\bunion\s+all\b|\bunion\s+distinct\b|\bunion\b", re.I)

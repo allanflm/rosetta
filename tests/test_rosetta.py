@@ -14,14 +14,18 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from rosetta import (  # noqa: E402
     Config,
+    Contexto,
     ResolvedorNomes,
     SqlNaoPermitido,
     assert_leitura,
     gerar_sql,
     montar_arvore,
+    nome_arquivo_notebook,
     nome_pasta,
     parse_cds,
+    proxima_versao,
     salvar_artefatos,
+    salvar_notebook,
     sanitizar,
 )
 
@@ -231,8 +235,8 @@ def test_arvore_nao_repete_no_compartilhado():
 
 
 def test_nome_pasta_sanitiza():
-    assert nome_pasta("/AIF/C_INTERFACESTATISTICS") == "AIF_C_INTERFACESTATISTICS"
-    assert nome_pasta("i_address") == "I_ADDRESS"
+    assert nome_pasta("/AIF/C_INTERFACESTATISTICS") == "view_aif_c_interfacestatistics"
+    assert nome_pasta("i_address") == "view_i_address"
     assert sanitizar("/DMBE/C_X") == "dmbe_c_x"
 
 
@@ -244,13 +248,13 @@ def test_salvar_cria_pasta_por_ddl(tmp_path, resolvedor):
     art = salvar_artefatos(tmp_path, "Z_BSAS", sql, avisos, v, arv, gravar=True)
 
     assert art.gravado
-    assert (tmp_path / "Z_BSAS" / "Z_BSAS.sql").exists()
-    assert (tmp_path / "Z_BSAS" / "arvore.txt").exists()
-    assert (tmp_path / "Z_BSAS" / "metadata.json").exists()
+    assert (tmp_path / "view_z_bsas" / "z_bsas.sql").exists()
+    assert (tmp_path / "view_z_bsas" / "arvore.txt").exists()
+    assert (tmp_path / "view_z_bsas" / "metadata.json").exists()
     # sem avisos -> não cria avisos.txt
-    assert not (tmp_path / "Z_BSAS" / "avisos.txt").exists()
+    assert not (tmp_path / "view_z_bsas" / "avisos.txt").exists()
 
-    meta = json.loads((tmp_path / "Z_BSAS" / "metadata.json").read_text(encoding="utf-8"))
+    meta = json.loads((tmp_path / "view_z_bsas" / "metadata.json").read_text(encoding="utf-8"))
     assert meta["ddlname"] == "Z_BSAS"
     assert meta["n_campos"] == 3
     assert meta["tabelas_fisicas"] == ["BSAS"]
@@ -261,7 +265,7 @@ def test_dry_run_nao_escreve(tmp_path, resolvedor):
     sql, avisos = gerar_sql(v, resolvedor)
     art = salvar_artefatos(tmp_path, "Z_BSAS", sql, avisos, v, None, gravar=False)
     assert not art.gravado
-    assert not (tmp_path / "Z_BSAS").exists()
+    assert not (tmp_path / "view_z_bsas").exists()
 
 
 def test_avisos_sao_gravados(tmp_path, resolvedor):
@@ -269,4 +273,85 @@ def test_avisos_sao_gravados(tmp_path, resolvedor):
     sql, avisos = gerar_sql(v, resolvedor)
     assert avisos
     salvar_artefatos(tmp_path, "Z_ABAP", sql, avisos, v, None, gravar=True)
-    assert (tmp_path / "Z_ABAP" / "avisos.txt").exists()
+    assert (tmp_path / "view_z_abap" / "avisos.txt").exists()
+
+
+def test_nome_arquivo_notebook_e_versionado():
+    assert nome_arquivo_notebook("Z_BSAS", 1) == "view_z_bsas_00001.ipynb"
+    assert nome_arquivo_notebook("Z_BSAS", 12) == "view_z_bsas_00012.ipynb"
+
+
+def test_proxima_versao_comeca_em_1_sem_notebook_existente(tmp_path):
+    assert proxima_versao(tmp_path / "nao_existe", "Z_BSAS") == 1
+
+
+def test_proxima_versao_incrementa_sobre_existentes(tmp_path):
+    pasta = tmp_path / "view_z_bsas"
+    pasta.mkdir()
+    (pasta / "view_z_bsas_00001.ipynb").write_text("{}", encoding="utf-8")
+    (pasta / "view_z_bsas_00002.ipynb").write_text("{}", encoding="utf-8")
+
+    assert proxima_versao(pasta, "Z_BSAS") == 3
+
+
+def test_salvar_notebook_gravar_false_nao_escreve(tmp_path):
+    caminho = salvar_notebook(tmp_path, "Z_BSAS", {"cells": []}, gravar=False)
+    assert caminho.name == "view_z_bsas_00001.ipynb"
+    assert not caminho.exists()
+
+
+def test_salvar_notebook_gravar_true_nao_sobrescreve_versao_anterior(tmp_path):
+    p1 = salvar_notebook(tmp_path, "Z_BSAS", {"cells": ["v1"]}, gravar=True)
+    p2 = salvar_notebook(tmp_path, "Z_BSAS", {"cells": ["v2"]}, gravar=True)
+
+    assert p1.name == "view_z_bsas_00001.ipynb"
+    assert p2.name == "view_z_bsas_00002.ipynb"
+    assert json.loads(p1.read_text(encoding="utf-8"))["cells"] == ["v1"]
+    assert json.loads(p2.read_text(encoding="utf-8"))["cells"] == ["v2"]
+
+
+# --------------------------------------------------------- Contexto.gerar_view_notebook
+
+
+def test_gerar_view_notebook_sem_spark_forca_fluxo_b(tmp_path):
+    indice = {"Z_BSAS": CDS_SIMPLES}
+    ctx = Contexto(spark=None, cfg=Config(), indice=indice, raiz_ddl=tmp_path, verboso=False)
+
+    res = ctx.gerar_view_notebook("Z_BSAS", spark=None, gravar_notebook=True)
+
+    assert res.conteudo.fluxo_usado == "B"
+    assert not res.conteudo.pendente_validacao
+    assert res.caminho_notebook.exists()
+    assert res.artefatos.pasta == tmp_path / "view_z_bsas"
+
+    meta = json.loads((tmp_path / "view_z_bsas" / "metadata.json").read_text(encoding="utf-8"))
+    assert meta["pendente_validacao"] is False
+    assert meta["notebook"] == "view_z_bsas/view_z_bsas_00001.ipynb"
+
+
+def test_gerar_view_notebook_levanta_erro_para_ddlname_desconhecido(tmp_path):
+    ctx = Contexto(spark=None, cfg=Config(), indice={}, raiz_ddl=tmp_path, verboso=False)
+    with pytest.raises(ValueError):
+        ctx.gerar_view_notebook("NAO_EXISTE")
+
+
+def test_gerar_view_notebook_marca_pendente_quando_fonte_trunca(tmp_path):
+    """Fonte truncada = pendente_validacao automático, mesmo sem passar pelo
+    workflow de completar truncadas (regressão do teste manual com I_ADDRESS real,
+    que saiu com pendente_validacao=false apesar do SQL não ter sido gerado)."""
+    fonte_truncada = "define view I_Address as select from vbap as a {\n  key a.vbeln as Sale"
+    indice = {"I_ADDRESS": fonte_truncada}
+    ctx = Contexto(spark=None, cfg=Config(), indice=indice, raiz_ddl=tmp_path, verboso=False)
+
+    res = ctx.gerar_view_notebook("I_ADDRESS", spark=None, gravar_notebook=True)
+
+    assert not res.view.parseou
+    assert res.conteudo.pendente_validacao is True
+    assert res.conteudo.motivo_pendencia
+    assert "truncado" in res.conteudo.motivo_pendencia[0]
+
+    meta = json.loads((tmp_path / "view_i_address" / "metadata.json").read_text(encoding="utf-8"))
+    assert meta["pendente_validacao"] is True
+
+    nb_texto = (tmp_path / "view_i_address" / "view_i_address_00001.ipynb").read_text(encoding="utf-8")
+    assert "PENDENTE_VALIDACAO" in nb_texto

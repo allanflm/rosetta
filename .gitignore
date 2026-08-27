@@ -6,3 +6,6 @@ __pycache__/
 venv/
 .DS_Store
 referencias/
+
+mcp_config.json
+.env

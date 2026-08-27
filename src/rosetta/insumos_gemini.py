@@ -207,11 +207,21 @@ def formatar_metadados(linhas: List[dict]) -> str:
 # --------------------------------------------------------- 3. SHOW CREATE TABLE
 
 
-def buscar_show_create_table(spark, cfg: Config, tabela_legada: str) -> str:
-    fqn = f"{cfg.fqn_legado}.{tabela_legada.strip().lower()}"
-    linhas = sql_leitura(spark, f"SHOW CREATE TABLE {fqn}").collect()
+def buscar_show_create_table(
+    spark, cfg: Config, tabela_legada: str = "", *, fqn: Optional[str] = None
+) -> str:
+    """SHOW CREATE TABLE somente-leitura.
+
+    Por padrão (`fqn=None`) monta a FQN a partir da tabela legada (`cfg.fqn_legado` +
+    `tabela_legada`) — comportamento original, usado pelo pacote do Gemini. Passe
+    `fqn=` explícito pra apontar pra outro catálogo/schema (ex.: o destino, usado pelo
+    Fluxo A de `fluxo.py`, que precisa checar se a view já existe lá) sem duplicar esta
+    função.
+    """
+    alvo = fqn or f"{cfg.fqn_legado}.{tabela_legada.strip().lower()}"
+    linhas = sql_leitura(spark, f"SHOW CREATE TABLE {alvo}").collect()
     if not linhas:
-        return f"-- {fqn}: SHOW CREATE TABLE não retornou nada"
+        return f"-- {alvo}: SHOW CREATE TABLE não retornou nada"
     campo = linhas[0].asDict()
     chave = next(iter(campo))
     return "\n".join(r[chave] for r in linhas)
