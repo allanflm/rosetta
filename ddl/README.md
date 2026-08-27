@@ -9,7 +9,6 @@ ddl/
 │   ├── arvore.txt        # árvore de dependências no momento da geração
 │   ├── avisos.txt        # só existe quando a tradução tem ressalvas
 │   └── metadata.json     # entidade, tipo, tabelas físicas, contagens, timestamp
-└── _inventario/          # saída do notebook 02 (certeza_real.csv, garantidas.txt)
 ```
 
 O nome da pasta é o ddlname em maiúsculas, com `/` virando `_`
